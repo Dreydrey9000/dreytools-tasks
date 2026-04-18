@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0908">
+<title>Tasks — Drey Tools</title>
+<style>
+  :root {
+    --bg: #0a0908; --bg-1: #14110e; --bg-2: #1c1815; --bg-3: #2a2420;
+    --line: #2e2722; --line-hot: #3a2e24;
+    --text: #f5ead9; --text-dim: #b5a493; --text-muted: #6b5d4f;
+    --cyan: #22d3ee; --cyan-dim: #0891b2;
+    --amber: #f59e0b; --green: #10b981; --pink: #ec4899; --violet: #a78bfa;
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.4;
+    overflow: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(34, 211, 238, 0.05), transparent 60%);
+    pointer-events: none;
+  }
+
+  .app {
+    position: relative; z-index: 1;
+    height: 100dvh;
+    display: flex; flex-direction: column;
+    max-width: 1400px; margin: 0 auto;
+  }
+
+  header {
+    padding: calc(var(--safe-top) + 14px) 20px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(14,12,11,0.85); backdrop-filter: blur(16px);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .brand {
+    font-weight: 900; letter-spacing: -0.02em; font-size: 17px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .brand::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 10px var(--cyan);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .board-tabs {
+    display: inline-flex; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 2px;
+  }
+  .board-tabs button {
+    padding: 6px 12px; background: transparent; border: none;
+    color: var(--text-muted); font-size: 12px; font-weight: 700;
+    cursor: pointer; font-family: inherit; border-radius: 6px;
+  }
+  .board-tabs button.active { background: var(--cyan); color: var(--bg); }
+
+  .search-inline {
+    position: relative;
+    flex: 1; max-width: 300px;
+  }
+  .search-inline svg {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 14px; color: var(--text-muted);
+    pointer-events: none;
+  }
+  .search-inline input {
+    width: 100%; padding: 8px 12px 8px 32px;
+    background: var(--bg-2); border: 1px solid var(--line-hot);
+    color: var(--text); font-size: 13px; font-family: inherit;
+    border-radius: 8px; outline: none;
+  }
+  .search-inline input:focus { border-color: var(--cyan); }
+
+  .stat-pill {
+    padding: 6px 12px; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 20px; font-size: 12px; color: var(--text-dim);
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+  .stat-pill b { color: var(--cyan); }
+
+  .new-btn {
+    padding: 8px 14px; background: var(--cyan); color: var(--bg);
+    border: none; border-radius: 8px; font-weight: 700; font-size: 13px;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+    box-shadow: 0 4px 12px rgba(34,211,238,0.25);
+  }
+  .new-btn:hover { box-shadow: 0 6px 18px rgba(34,211,238,0.4); }
+  .new-btn svg { width: 14px; height: 14px; }
+
+  /* KANBAN */
+  .board {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 16px 20px calc(16px + var(--safe-bottom));
+    -webkit-overflow-scrolling: touch;
+  }
+  .columns {
+    display: flex; gap: 14px;
+    min-width: min-content; height: 100%;
+  }
+  .column {
+    width: 280px; flex-shrink: 0;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    display: flex; flex-direction: column;
+    max-height: 100%;
+  }
+  .column.drag-over {
+    border-color: var(--cyan);
+    background: rgba(34, 211, 238, 0.03);
+  }
+  .col-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .col-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .col-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .col-dot.backlog { background: var(--text-muted); }
+  .col-dot.todo { background: var(--amber); }
+  .col-dot.doing { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+  .col-dot.done { background: var(--green); }
+  .col-count {
+    font-size: 11px; font-weight: 700;
+    background: var(--bg-3); padding: 2px 8px; border-radius: 10px;
+    color: var(--text-muted);
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+  .col-add {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: transparent; border: none; color: var(--text-muted);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .col-add:hover { color: var(--cyan); background: var(--bg-3); }
+  .col-add svg { width: 14px; height: 14px; }
+
+  .col-body {
+    flex: 1; overflow-y: auto;
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 8px;
+    scrollbar-width: thin; scrollbar-color: var(--line-hot) transparent;
+  }
+  .col-body::-webkit-scrollbar { width: 4px; }
+  .col-body::-webkit-scrollbar-thumb { background: var(--line-hot); border-radius: 2px; }
+
+  /* TASK CARD */
+  .card {
+    background: var(--bg-2); border: 1px solid var(--line-hot);
+    border-radius: 10px; padding: 12px 14px;
+    cursor: grab;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .card:hover { border-color: var(--cyan); transform: translateY(-1px); }
+  .card:active { cursor: grabbing; }
+  .card.dragging { opacity: 0.4; }
+
+  .card-tag-row {
+    display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;
+  }
+  .tag {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .tag.work { background: rgba(34,211,238,0.15); color: #67e8f9; }
+  .tag.client { background: rgba(236,72,153,0.15); color: #f9a8d4; }
+  .tag.ship { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+  .tag.research { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+  .tag.bug { background: rgba(248,113,113,0.15); color: #fca5a5; }
+  .tag.p1 { background: rgba(239,68,68,0.2); color: #f87171; }
+  .tag.p2 { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .tag.p3 { background: rgba(148,163,184,0.1); color: #cbd5e1; }
+
+  .card-title {
+    font-size: 13px; font-weight: 600; line-height: 1.35;
+    margin-bottom: 8px;
+  }
+  .card-desc {
+    font-size: 12px; color: var(--text-muted); margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .card-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .card-due {
+    display: flex; align-items: center; gap: 4px;
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+  .card-due.overdue { color: #f87171; }
+  .card-due.soon { color: var(--amber); }
+  .card-due svg { width: 11px; height: 11px; }
+  .card-avatar {
+    width: 20px; height: 20px; border-radius: 50%;
+    font-size: 9px; font-weight: 800; color: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card-avatar.cy { background: linear-gradient(135deg, #22d3ee, #0891b2); }
+  .card-avatar.am { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+  .card-avatar.pk { background: linear-gradient(135deg, #ec4899, #be185d); color: #fff; }
+  .card-avatar.vl { background: linear-gradient(135deg, #a78bfa, #7c3aed); color: #fff; }
+
+  .drop-zone {
+    min-height: 40px; border-radius: 8px;
+    border: 2px dashed transparent;
+    transition: all 0.15s;
+  }
+  .drop-zone.drag-active {
+    border-color: var(--cyan);
+    background: rgba(34,211,238,0.05);
+  }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg-1); border: 1px solid var(--line-hot);
+    border-radius: 20px;
+    width: 100%; max-width: 480px;
+    padding: 24px;
+    max-height: 90dvh; overflow-y: auto;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px;
+  }
+  .modal-title { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+  .modal-close {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--bg-2); border: 1px solid var(--line);
+    color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-close svg { width: 16px; height: 16px; }
+
+  .mfield { margin-bottom: 14px; }
+  .mfield label {
+    display: block; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .mfield input, .mfield textarea, .mfield select {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg-2); border: 1px solid var(--line-hot);
+    color: var(--text); font-size: 15px; font-family: inherit;
+    border-radius: 10px; outline: none;
+  }
+  .mfield input:focus, .mfield textarea:focus, .mfield select:focus { border-color: var(--cyan); }
+  .mfield textarea { resize: vertical; min-height: 70px; }
+  @supports (-webkit-touch-callout: none) {
+    .mfield input, .mfield textarea, .mfield select { font-size: 16px; }
+  }
+
+  .tag-row-sel {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .tag-pill {
+    padding: 5px 10px; background: var(--bg-2);
+    border: 1px solid var(--line-hot); border-radius: 6px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; cursor: pointer; color: var(--text-dim);
+  }
+  .tag-pill.active { background: rgba(34,211,238,0.15); border-color: var(--cyan); color: var(--cyan); }
+
+  .modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .btn {
+    flex: 1; padding: 11px;
+    border: 1px solid var(--line); background: var(--bg-2);
+    color: var(--text); font-size: 14px; font-weight: 700;
+    border-radius: 10px; cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn.primary { background: var(--cyan); color: var(--bg); border-color: var(--cyan); }
+  .btn.primary:hover { color: var(--bg); box-shadow: 0 8px 20px rgba(34,211,238,0.3); }
+  .btn.danger { background: transparent; color: #f87171; border-color: rgba(248,113,113,0.3); }
+  .btn.danger:hover { border-color: #f87171; color: #f87171; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header>
+    <div class="brand">Drey Tasks</div>
+    <div class="board-tabs" id="board-tabs">
+      <button class="active" data-board="personal" type="button">Personal</button>
+      <button data-board="1bb" type="button">1BB</button>
+      <button data-board="ve" type="button">VE</button>
+    </div>
+    <div class="search-inline">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="search-input" placeholder="Search tasks..." />
+    </div>
+    <div class="stat-pill" id="stat-pill"><b>0</b> open · 0 done</div>
+    <button class="new-btn" id="new-btn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New
+    </button>
+  </header>
+
+  <div class="board">
+    <div class="columns" id="columns"></div>
+  </div>
+
+</div>
+
+<!-- NEW/EDIT TASK MODAL -->
+<div class="modal-overlay" id="task-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-title">New Task</div>
+      <button class="modal-close" id="modal-close" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="task-form">
+      <div class="mfield">
+        <label for="t-title">Title</label>
+        <input type="text" id="t-title" required maxlength="120" placeholder="e.g. Ship product page" />
+      </div>
+      <div class="mfield">
+        <label for="t-desc">Description</label>
+        <textarea id="t-desc" maxlength="500" placeholder="Optional details..."></textarea>
+      </div>
+      <div class="modal-row">
+        <div class="mfield">
+          <label for="t-status">Column</label>
+          <select id="t-status">
+            <option value="backlog">Backlog</option>
+            <option value="todo" selected>Todo</option>
+            <option value="doing">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div class="mfield">
+          <label for="t-due">Due date</label>
+          <input type="date" id="t-due" />
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="mfield">
+          <label for="t-owner">Owner</label>
+          <select id="t-owner">
+            <option value="cy">Drey</option>
+            <option value="am">Kevin</option>
+            <option value="pk">Amanda</option>
+            <option value="vl">Luis</option>
+          </select>
+        </div>
+        <div class="mfield">
+          <label for="t-priority">Priority</label>
+          <select id="t-priority">
+            <option value="p1">P1 · High</option>
+            <option value="p2" selected>P2 · Med</option>
+            <option value="p3">P3 · Low</option>
+          </select>
+        </div>
+      </div>
+      <div class="mfield">
+        <label>Tags</label>
+        <div class="tag-row-sel" id="tag-row">
+          <div class="tag-pill" data-tag="work">Work</div>
+          <div class="tag-pill" data-tag="client">Client</div>
+          <div class="tag-pill" data-tag="ship">Ship</div>
+          <div class="tag-pill" data-tag="research">Research</div>
+          <div class="tag-pill" data-tag="bug">Bug</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn danger" id="delete-btn" style="display:none;">Delete</button>
+        <button type="button" class="btn" id="cancel-btn">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const KEY = 'dreytools-tasks-v1';
+  const STATUSES = ['backlog', 'todo', 'doing', 'done'];
+  const STATUS_LABELS = { backlog: 'Backlog', todo: 'Todo', doing: 'In Progress', done: 'Done' };
+  const OWNER_NAMES = { cy: 'Drey', am: 'Kevin', pk: 'Amanda', vl: 'Luis' };
+
+  function seed() {
+    const today = new Date();
+    function days(n) {
+      const d = new Date(today); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10);
+    }
+    return {
+      personal: [
+        { id: crypto.randomUUID(), title: 'Ship product page to production', desc: 'Wire real Stripe after keys arrive', status: 'doing', priority: 'p1', tags: ['ship','work'], owner: 'cy', due: days(1) },
+        { id: crypto.randomUUID(), title: 'Weekly Life Dashboard review', desc: 'Numbers + goals for next week', status: 'todo', priority: 'p2', tags: ['work'], owner: 'cy', due: days(2) },
+        { id: crypto.randomUUID(), title: 'Push new DR. DREY track', desc: 'Boot Sequence II — final mix', status: 'backlog', priority: 'p3', tags: [], owner: 'cy', due: '' },
+        { id: crypto.randomUUID(), title: 'Gym 4x this week', desc: '', status: 'doing', priority: 'p2', tags: [], owner: 'cy', due: days(5) },
+        { id: crypto.randomUUID(), title: 'Weather widget live', desc: 'weather.dreytools.com ready', status: 'done', priority: 'p2', tags: ['ship'], owner: 'cy', due: days(-1) },
+        { id: crypto.randomUUID(), title: 'Chat UI live', desc: 'chat.dreytools.com shipped', status: 'done', priority: 'p2', tags: ['ship'], owner: 'cy', due: days(-1) },
+      ],
+      '1bb': [
+        { id: crypto.randomUUID(), title: 'Follow up with Maya R.', desc: 'Tampa lead, needs 2pm callback', status: 'todo', priority: 'p1', tags: ['client'], owner: 'am', due: days(0) },
+        { id: crypto.randomUUID(), title: 'Update Hit List for Monday', desc: 'Add 2 new prospects', status: 'todo', priority: 'p2', tags: ['work'], owner: 'am', due: days(3) },
+        { id: crypto.randomUUID(), title: 'Community Platform v1 scope', desc: 'White-label community features', status: 'backlog', priority: 'p2', tags: ['research'], owner: 'cy', due: '' },
+        { id: crypto.randomUUID(), title: 'Close Tampa deal', desc: 'Wire tomorrow', status: 'done', priority: 'p1', tags: ['ship'], owner: 'am', due: days(-1) },
+      ],
+      've': [
+        { id: crypto.randomUUID(), title: 'Amanda carousel queue (next 2 weeks)', desc: '6 sets total', status: 'todo', priority: 'p2', tags: ['client'], owner: 'pk', due: days(4) },
+        { id: crypto.randomUUID(), title: 'VE Clipper v2 planning', desc: 'Upgrade path via OpenMontage', status: 'backlog', priority: 'p3', tags: ['research'], owner: 'cy', due: '' },
+        { id: crypto.randomUUID(), title: 'Dave skill v3 audit', desc: 'Luis to pair on this Thu', status: 'doing', priority: 'p2', tags: ['work'], owner: 'vl', due: days(2) },
+      ],
+    };
+  }
+
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(KEY));
+      if (data && data.personal) return data;
+    } catch {}
+    const s = seed();
+    localStorage.setItem(KEY, JSON.stringify(s));
+    return s;
+  }
+  function save(data) { localStorage.setItem(KEY, JSON.stringify(data)); }
+
+  let data = load();
+  let currentBoard = 'personal';
+  let currentTag = new Set();
+  let searchQuery = '';
+  let editingId = null;
+
+  const $ = id => document.getElementById(id);
+
+  function dueMeta(due) {
+    if (!due) return { label: '', cls: '' };
+    const d = new Date(due + 'T00:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.round((d - today) / 86400000);
+    let label;
+    if (diff < 0) label = Math.abs(diff) + 'd late';
+    else if (diff === 0) label = 'Today';
+    else if (diff === 1) label = 'Tomorrow';
+    else if (diff < 7) label = diff + 'd';
+    else label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const cls = diff < 0 ? 'overdue' : diff <= 1 ? 'soon' : '';
+    return { label, cls };
+  }
+
+  function renderBoard() {
+    const board = data[currentBoard] || [];
+    const cols = $('columns');
+    cols.replaceChildren();
+
+    const q = searchQuery.toLowerCase();
+    const filtered = board.filter(t => {
+      if (q && !t.title.toLowerCase().includes(q) && !(t.desc || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+    STATUSES.forEach(status => {
+      const col = document.createElement('div');
+      col.className = 'column';
+      col.dataset.status = status;
+
+      const head = document.createElement('div');
+      head.className = 'col-head';
+      const title = document.createElement('div');
+      title.className = 'col-title';
+      const dot = document.createElement('span');
+      dot.className = 'col-dot ' + status;
+      title.appendChild(dot);
+      const txt = document.createElement('span');
+      txt.textContent = STATUS_LABELS[status];
+      title.appendChild(txt);
+      const count = document.createElement('span');
+      count.className = 'col-count';
+      const tasks = filtered.filter(t => t.status === status);
+      count.textContent = tasks.length;
+      title.appendChild(count);
+
+      head.appendChild(title);
+      const add = document.createElement('button');
+      add.className = 'col-add';
+      add.title = 'Add to ' + status;
+      add.type = 'button';
+      const addSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      addSvg.setAttribute('viewBox', '0 0 24 24');
+      addSvg.setAttribute('fill', 'none');
+      addSvg.setAttribute('stroke', 'currentColor');
+      addSvg.setAttribute('stroke-width', '2.5');
+      addSvg.setAttribute('stroke-linecap', 'round');
+      addSvg.setAttribute('stroke-linejoin', 'round');
+      const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line1.setAttribute('x1', '12'); line1.setAttribute('y1', '5'); line1.setAttribute('x2', '12'); line1.setAttribute('y2', '19');
+      const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line2.setAttribute('x1', '5'); line2.setAttribute('y1', '12'); line2.setAttribute('x2', '19'); line2.setAttribute('y2', '12');
+      addSvg.appendChild(line1); addSvg.appendChild(line2);
+      add.appendChild(addSvg);
+      add.addEventListener('click', () => openNew(status));
+      head.appendChild(add);
+
+      col.appendChild(head);
+
+      const body = document.createElement('div');
+      body.className = 'col-body';
+      body.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+      body.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+      body.addEventListener('drop', e => {
+        e.preventDefault();
+        col.classList.remove('drag-over');
+        const id = e.dataTransfer.getData('text/plain');
+        moveTask(id, status);
+      });
+
+      tasks.forEach(t => body.appendChild(renderCard(t)));
+      col.appendChild(body);
+      cols.appendChild(col);
+    });
+
+    // Stats
+    const open = board.filter(t => t.status !== 'done').length;
+    const done = board.filter(t => t.status === 'done').length;
+    const pill = $('stat-pill');
+    pill.replaceChildren();
+    const bOpen = document.createElement('b');
+    bOpen.textContent = open;
+    pill.appendChild(bOpen);
+    pill.appendChild(document.createTextNode(' open · ' + done + ' done'));
+  }
+
+  function renderCard(t) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.draggable = true;
+    card.dataset.id = t.id;
+
+    // Tag row
+    if ((t.tags && t.tags.length) || t.priority) {
+      const tagRow = document.createElement('div');
+      tagRow.className = 'card-tag-row';
+      if (t.priority) {
+        const p = document.createElement('span');
+        p.className = 'tag ' + t.priority;
+        p.textContent = t.priority.toUpperCase();
+        tagRow.appendChild(p);
+      }
+      (t.tags || []).forEach(tag => {
+        const el = document.createElement('span');
+        el.className = 'tag ' + tag;
+        el.textContent = tag;
+        tagRow.appendChild(el);
+      });
+      card.appendChild(tagRow);
+    }
+
+    const title = document.createElement('div');
+    title.className = 'card-title';
+    title.textContent = t.title;
+    card.appendChild(title);
+
+    if (t.desc) {
+      const desc = document.createElement('div');
+      desc.className = 'card-desc';
+      desc.textContent = t.desc.length > 80 ? t.desc.slice(0, 80) + '…' : t.desc;
+      card.appendChild(desc);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'card-meta';
+    const due = dueMeta(t.due);
+    const dueEl = document.createElement('div');
+    dueEl.className = 'card-due ' + due.cls;
+    if (due.label) {
+      const dueSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      dueSvg.setAttribute('viewBox', '0 0 24 24');
+      dueSvg.setAttribute('fill', 'none');
+      dueSvg.setAttribute('stroke', 'currentColor');
+      dueSvg.setAttribute('stroke-width', '2');
+      dueSvg.setAttribute('stroke-linecap', 'round');
+      dueSvg.setAttribute('stroke-linejoin', 'round');
+      const dueCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dueCircle.setAttribute('cx', '12'); dueCircle.setAttribute('cy', '12'); dueCircle.setAttribute('r', '10');
+      const duePath = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      duePath.setAttribute('points', '12 6 12 12 16 14');
+      dueSvg.appendChild(dueCircle); dueSvg.appendChild(duePath);
+      dueEl.appendChild(dueSvg);
+      const dueTxt = document.createElement('span');
+      dueTxt.textContent = due.label;
+      dueEl.appendChild(dueTxt);
+    }
+    meta.appendChild(dueEl);
+
+    const av = document.createElement('div');
+    av.className = 'card-avatar ' + t.owner;
+    av.textContent = OWNER_NAMES[t.owner].slice(0, 2).toUpperCase();
+    av.title = OWNER_NAMES[t.owner];
+    meta.appendChild(av);
+
+    card.appendChild(meta);
+
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', t.id);
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    card.addEventListener('click', () => openEdit(t));
+
+    return card;
+  }
+
+  function moveTask(id, newStatus) {
+    const board = data[currentBoard];
+    const t = board.find(x => x.id === id);
+    if (!t) return;
+    t.status = newStatus;
+    save(data);
+    renderBoard();
+  }
+
+  // MODAL
+  let selectedTags = new Set();
+  function openNew(status) {
+    editingId = null;
+    $('modal-title').textContent = 'New Task';
+    $('t-title').value = '';
+    $('t-desc').value = '';
+    $('t-status').value = status || 'todo';
+    $('t-due').value = '';
+    $('t-owner').value = 'cy';
+    $('t-priority').value = 'p2';
+    selectedTags = new Set();
+    document.querySelectorAll('.tag-pill').forEach(p => p.classList.remove('active'));
+    $('delete-btn').style.display = 'none';
+    $('task-modal').classList.add('open');
+    setTimeout(() => $('t-title').focus(), 100);
+  }
+  function openEdit(t) {
+    editingId = t.id;
+    $('modal-title').textContent = 'Edit Task';
+    $('t-title').value = t.title;
+    $('t-desc').value = t.desc || '';
+    $('t-status').value = t.status;
+    $('t-due').value = t.due || '';
+    $('t-owner').value = t.owner;
+    $('t-priority').value = t.priority;
+    selectedTags = new Set(t.tags || []);
+    document.querySelectorAll('.tag-pill').forEach(p => {
+      p.classList.toggle('active', selectedTags.has(p.dataset.tag));
+    });
+    $('delete-btn').style.display = '';
+    $('task-modal').classList.add('open');
+  }
+
+  document.querySelectorAll('.tag-pill').forEach(p => {
+    p.addEventListener('click', () => {
+      const tag = p.dataset.tag;
+      if (selectedTags.has(tag)) selectedTags.delete(tag);
+      else selectedTags.add(tag);
+      p.classList.toggle('active');
+    });
+  });
+
+  $('new-btn').addEventListener('click', () => openNew());
+  $('modal-close').addEventListener('click', () => $('task-modal').classList.remove('open'));
+  $('cancel-btn').addEventListener('click', () => $('task-modal').classList.remove('open'));
+  $('delete-btn').addEventListener('click', () => {
+    if (!editingId) return;
+    data[currentBoard] = data[currentBoard].filter(x => x.id !== editingId);
+    save(data);
+    $('task-modal').classList.remove('open');
+    renderBoard();
+  });
+  document.querySelectorAll('.modal-overlay').forEach(o => {
+    o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+  });
+
+  $('task-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const payload = {
+      title: $('t-title').value.trim(),
+      desc: $('t-desc').value.trim(),
+      status: $('t-status').value,
+      due: $('t-due').value,
+      owner: $('t-owner').value,
+      priority: $('t-priority').value,
+      tags: Array.from(selectedTags),
+    };
+    if (!payload.title) return;
+
+    if (editingId) {
+      const t = data[currentBoard].find(x => x.id === editingId);
+      Object.assign(t, payload);
+    } else {
+      data[currentBoard].push({ id: crypto.randomUUID(), ...payload });
+    }
+    save(data);
+    $('task-modal').classList.remove('open');
+    renderBoard();
+  });
+
+  // BOARD TABS
+  document.querySelectorAll('#board-tabs button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#board-tabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      currentBoard = b.dataset.board;
+      renderBoard();
+    });
+  });
+
+  // SEARCH
+  $('search-input').addEventListener('input', e => {
+    searchQuery = e.target.value;
+    renderBoard();
+  });
+
+  renderBoard();
+</script>
+</body>
+</html>
